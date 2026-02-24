@@ -133,6 +133,7 @@ fe_month
 
 Now, let's summarize daily weather variables based on month.  
 ```{r fe_month_sum}
+##"Across" function to create a condition to calculate the mean and sum:
 fe_month_sum <- fe_month %>%
   group_by(year, site, month_abb, strength_gtex) %>%
   summarise(across(.cols = c(dayl.s,
@@ -171,8 +172,19 @@ fe_month %>%
 Now, what if we wanted to have month as part of the column name instead?  
 
 ```{r fe_month_sum_wide}
-fe_month_sum_wide 
+##The "-" in select means select out from the data set.
+##"paste0" means to paste together the information from 2 columns with a common separator as "_", and no space between them.
+##Using the "across" function is to apply some function across multiple columns at the same time.
+fe_month_sum_wide <- fe_month_sum %>%
+  pivot_longer(mean_dayl.s:sum_prcp.mm) %>%
+  mutate(varname = paste0(name, "_",month_abb)) %>%
+  dplyr::select(-name, -month_abb) %>%
+  pivot_wider(names_from = varname,
+              values_from = value
+              ) %>%
   # Rounding to one decimal point
+  ##Using "~", you can call an function inside the function "across" without giving a name for it, then you can specify a condition in which the "." is related to each single column and the "1" is the number of decimal place. 
+mutate(across(c(3:75), ~round(., 1)))
 
 fe_month_sum_wide  
 ```
@@ -187,28 +199,77 @@ Let's make a ridge plot to visualize the distribution of one variable over month
 
 ```{r}
 #install.packages("ggridges")
+install.packages("ggridges")
 library(ggridges)
+
+
+ggplot(data = fe_month_sum,
+       aes(x = mean_tmax.c,
+           y = month_abb,
+           fill = stat(x)
+           )) + 
+  geom_density_ridges_gradient(scale = 2,
+                               rel_min_height = 0.01
+                               ) + 
+  scale_fill_viridis_c(option = "magma", alpha = .8) +
+  theme(legend_positon = "none") +
+  labs(x = "Monthly-avarage maximum temperature (C)",
+       y = "Month"
+       )
 
 
 ```
 
 Now let's do that for all variables.  
 ```{r}
-finalplots 
+
+finalplots <- fe_month_sum %>%
+  pivot_longer(mean_dayl.s:sum_prcp.mm) %>%
+  group_by(name) %>%
+  nest() %>%
+  mutate(plot = map2(data, name,
+                     ~ggplot(data = .x,
+       aes(x = value,
+           y = month_abb,
+           fill = stat(x)
+           )) + 
+  geom_density_ridges_gradient(scale = 2,
+                               rel_min_height = 0.01
+                               ) + 
+  scale_fill_viridis_c(option = "magma", alpha = .8) +
+  theme(legend_positon = "none") +
+  labs(x = .y,
+       y = "Month"
+       )))
+
+
+
+
+
   
-  
+finalplots$plot  
 ```
 
 ```{r}
 #| message: false
 
 finalplots$plot
+
+library(gridExtra)
+
+finalplots_all <- marrangeGrob(finalplots$plot,
+                        ncol = 2, nrow = 3
+                        )
+
+finalplots_all
 ```
 
 # Exporting  
 ```{r}
 write_csv(fe_month_sum_wide,
           "../data/weather_monthsum.csv")
+
+
 ```
 
 # Summary  
